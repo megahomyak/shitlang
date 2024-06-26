@@ -1,4 +1,5 @@
 mod tools;
+mod rest;
 pub use tools::{SureShit, Rest, char, skip_whitespace, BoolShit, Position};
 
 type ShitResult<'a, T> = Result<tools::SureShit<'a, T>, ParsingError>;

@@ -1,18 +1,6 @@
 pub type BoolShit<'a> = Option<Rest<'a>>;
 pub type SureShit<'a, T> = Option<(T, Rest<'a>)>;
 
-#[derive(Clone, Copy)]
-pub struct Position {
-    pub col: usize,
-    pub row: usize,
-}
-
-#[derive(Clone, Copy)]
-pub struct Rest<'a> {
-    pub contents: &'a str,
-    pub pos: Position,
-}
-
 const FIRST_COL: usize = 0;
 
 impl<'a> From<&'a str> for Rest<'a> {
