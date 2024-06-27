@@ -1,30 +1,24 @@
-/*
 struct Pos {
     pub col: usize,
     pub row: usize,
 }
 
-struct Before<'a> {
+struct Seen<'a> {
     pub s: &'a str,
     pub beg: Pos,
     pub end: Pos,
 }
 
-struct After<'a> {
+struct Unseen<'a> {
     pub s: &'a str,
     pub beg: Pos,
 }
-*/
 
-struct Roller<'a> {
-    s: &'a str,
-    idx: usize,
+trait ParserChar {
+    fn c(&self) -> char;
+    fn before(&self) -> 
 }
-
-struct Roll<'a> {
-    roller: Roller<'a>,
-    c: char,
-}
+trait ParserStr<C: ParserChar>: Iterator<Item = C> {}
 
 impl<'a> Roll<'a> {
     fn before_idx(&self, idx: usize) -> &'a str {
