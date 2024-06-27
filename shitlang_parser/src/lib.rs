@@ -1,72 +1,55 @@
 struct Pos {
-    pub col: usize,
-    pub row: usize,
+    col: usize,
+    row: usize,
 }
 
+/*
+#[rustfmt::skip]
+impl Pos {
+    fn col(&self) -> usize { self.col }
+    fn row(&self) -> usize { self.row }
+}
+*/
+
 struct Seen<'a> {
-    pub s: &'a str,
-    pub beg: Pos,
-    pub end: Pos,
+    s: &'a str,
+    beg: Pos,
+    end: Pos,
 }
 
 struct Unseen<'a> {
-    pub s: &'a str,
-    pub beg: Pos,
+    s: &'a str,
+    beg: Pos,
 }
 
-trait ParserChar {
-    fn c(&self) -> char;
-    fn before(&self) -> 
-}
-trait ParserStr<C: ParserChar>: Iterator<Item = C> {}
+trait Slice<'a>: Sized {
+    type After;
 
-impl<'a> Roll<'a> {
-    fn before_idx(&self, idx: usize) -> &'a str {
-        if cfg!(debug_assertions) {
-            &self.roller.s[0..idx]
-        } else {
-            unsafe { self.roller.s.get_unchecked(0..idx) }
-        }
-    }
+    fn iter(&self) -> Iter<Self>;
 
-    fn after_idx(&self, idx: usize) -> &'a str {
-        if cfg!(debug_assertions) {
-            &self.roller.s[idx..]
-        } else {
-            unsafe { self.roller.s.get_unchecked(idx..) }
-        }
-    }
-
-    pub fn after(&self) -> &'a str {
-        self.after_idx(self.roller.idx)
-    }
-
-    pub fn before(&self) -> &'a str {
-        self.before_idx(self.roller.idx - self.c.len_utf8())
-    }
-
-    pub fn before_inclusive(&self) -> &'a str {
-        self.before_idx(self.roller.idx)
-    }
-
-    pub fn after_inclusive(&self) -> &'a str {
-        self.after_idx(self.roller.idx - self.c.len_utf8())
-    }
+    unsafe fn split(&self, pos: Pos, idx: usize) -> (Seen<'a>, Self::After);
 }
 
-impl<'a> Iterator for Roller<'a> {
-    type Item = Roll<'a>;
+struct Iter<'a, S: Slice<'a>> {
+    slice: S,
+    idx: usize,
+    cur: Pos,
+}
+
+struct Char<I> {
+
+}
+
+impl<S: Slice> Iterator for Iter<S> {
+    type Item = (Seen, char, S::After);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut chars = self.after().chars();
-        chars.next().inspect(|c| {
-            self.idx += c.len_utf8();
-        })
+
     }
 }
 
-fn roll(s: &str) -> Roller {
-    Roller { s, idx: 0 }
+impl<'a> Iterator for Seen<'a> {
+    type Item = (Seen, char, Seen);
 }
 
 #[cfg(test)]
