@@ -1,145 +1,76 @@
-mod pos {
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    pub struct Pos {
-        col: usize,
-        row: usize,
-    }
-
-    const FIRST_COL: usize = 0;
-
-    impl Pos {
-        pub fn new() -> Self {
-            Self {
-                col: FIRST_COL,
-                row: 1,
-            }
-        }
-
-        pub fn advance(&mut self, c: char) {
-            if c == '\n' {
-                self.row += 1;
-                self.col = FIRST_COL;
-            } else {
-                self.col += 1;
-            }
-        }
-
-        pub fn advanced(s: impl Iterator<Item = char>) -> Self {
-            let mut new = Self::new();
-            for c in s {
-                new.advance(c);
-            }
-            new
-        }
-
-        pub fn col(&self) -> usize {
-            self.col
-        }
-
-        pub fn row(&self) -> usize {
-            self.row
-        }
-    }
+pub enum Token<'a> {
+    Whitespace(&'a str),
+    VarName(&'a str),
+    Function,
+    Assignment,
+    If,
+    Else,
+    Loop,
+    End,
 }
-pub use pos::Pos;
 
-mod slice {
-    use super::*;
+pub enum ProgramPart<'a> {
+    Token(Token<'a>),
+    Raw(&'a str),
+}
 
-    pub struct Slice<'a> {
-        s: &'a str,
-        beg: Pos,
-        end: Pos,
-    }
+struct Pos {
+    col: usize,
+    row: usize,
+}
 
-    impl<'a> From<&'a str> for Slice<'a> {
-        fn from(s: &'a str) -> Self {
-            Self {
-                s,
-                beg: Pos::new(),
-                end: Pos::advanced(s.chars()),
+enum Error {
+    QuoteNotClosed { pos: Pos, }
+}
+
+enum Tokenizer<'a> {
+    Fucked { error: Error },
+    Right { program_parts: Vec<ProgramPart<'a>> },
+}
+
+impl<'a> Tokenizer<'a> {
+    fn concretize(self, f: impl Fn(&'a str) -> Result<Vec<ProgramPart<'a>>, Error>) -> Self {
+        match self {
+            Self::Fucked { .. } => self,
+            Self::Right { program_parts } => {
+                let mut new_program_parts = Vec::new();
+                for program_part in program_parts {
+                    match program_part {
+                        ProgramPart::Token(_) => new_program_parts.push(program_part),
+                        ProgramPart::Raw(s) => new_program_parts.extend(match f(s) {
+                            Ok(new_program_parts) => new_program_parts,
+                            Err(error) => return Self::Fucked { error: Error },
+                        }),
+                    }
+                }
+                Self::Right { program_parts: new_program_parts }
             }
         }
     }
 
-    impl<'a> Slice<'a> {
-        pub fn iter(&'a self) -> Iter<'a> {
-            Iter {
-                slice: self,
-                cur: self.beg,
-                idx: 0,
-            }
-        }
-    }
-
-    pub struct Iter<'a> {
-        slice: &'a Slice<'a>,
-        cur: Pos,
-        idx: usize,
-    }
-
-    impl<'a> Iter<'a> {
-        pub fn before(&self) -> Slice<'a> {
-            let s = unsafe { self.slice.s.get_unchecked(..self.idx) };
-            Slice {
-                s,
-                beg: self.slice.beg,
-                end: self.cur,
-            }
-        }
-
-        pub fn after(&self) -> Slice<'a> {
-            let s = unsafe { self.slice.s.get_unchecked(self.idx..) };
-            Slice {
-                s,
-                beg: self.slice.beg,
-                end: self.cur,
-            }
-        }
-    }
-
-    impl<'a> Iterator for Iter<'a> {
-        type Item = char;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.after().s.chars().next().inspect(|c| {
-                self.cur.advance(*c);
-                self.idx += c.len_utf8();
+    fn finalize(self, f: impl Fn(&'a str) -> Vec<Token<'a>>) -> Result<Vec<Token<'a>>, Error> {
+        match self {
+            Self::Fucked { error } => Err(error),
+            Self::Right { program_parts } => Ok({
+                let mut tokens = Vec::new();
+                for program_part in self.program_parts {
+                    match program_part {
+                        ProgramPart::Token(token) => tokens.push(token),
+                        ProgramPart::Raw(s) => tokens.extend(f(s)),
+                    }
+                }
+                tokens
             })
         }
     }
 }
-use slice::Slice;
+
+fn tokenize<'a>(program: &'a str) -> Vec<Token<'a>> {
+    Tokenizer {
+        program_parts: Vec::new(ProgramPart::Raw(program)),
+    }
+    .concretize(|s| s.split('"'))
+}
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_iter() {
-        let mut iter: slice::Iter = Slice::from("abc").iter();
-        assert_eq!(iter.next(), Some('a'));
-        assert_eq!(iter.next(), Some('b'));
-        assert_eq!(iter.next(), Some('c'));
-        assert_eq!(
-            iter.before(),
-            Slice {
-                s: "abc",
-                beg: Pos::new(),
-            }
-        );
-        assert_eq!(iter.after(), "def");
-        assert_eq!(iter.next(), Some('d'));
-        assert_eq!(roller.next(), Some('e'));
-        assert_eq!(roller.next(), Some('f'));
-        assert_eq!(roller.next(), None);
-    }
-
-    #[test]
-    fn test_parsing() {
-        let mut roller = roll("abc\"def\"ghi");
-        while let Some(c) = roller.next() {
-            if c == '"' {}
-        }
-    }
-}
+mod tests {}
