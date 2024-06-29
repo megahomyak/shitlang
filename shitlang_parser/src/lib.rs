@@ -1,5 +1,5 @@
 pub enum Token<'a> {
-    Whitespace(&'a str),
+    WhiteSpace(&'a str),
     VarName(&'a str),
     Function,
     Assignment,
@@ -14,20 +14,45 @@ pub enum ProgramPart<'a> {
     Raw(&'a str),
 }
 
+#[derive(Clone)]
 struct Pos {
     col: usize,
     row: usize,
+}
+
+const FIRST_COL: usize = 0;
+const FIRST_ROW: usize = 1;
+
+impl Pos {
+    pub fn new() -> Self {
+        Self { col: FIRST_COL, row: FIRST_ROW }
+    }
+
+    pub fn update(&mut self, s: &str) {
+        for c in s.chars() {
+            match c {
+                '\n' => {
+                    self.col = FIRST_COL;
+                    self.row += 1;
+                },
+                _ => {
+                    self.col += 1;
+                }
+            }
+        }
+    }
 }
 
 enum Error {
     QuoteNotClosed { pos: Pos },
 }
 
-struct Tokenizer<'a> {
+struct Program<'a> {
+    cur_pos: Pos,
     program_parts: Vec<ProgramPart<'a>>,
 }
 
-impl<'a> Tokenizer<'a> {
+impl<'a> Program<'a> {
     fn concretize(
         self,
         f: impl Fn(&'a str) -> Result<Vec<ProgramPart<'a>>, Error>,
@@ -62,7 +87,7 @@ impl<'a> Tokenizer<'a> {
 }
 
 fn tokenize<'a>(program: &'a str) -> Vec<Token<'a>> {
-    Tokenizer {
+    Program {
         program_parts: Vec::new(ProgramPart::Raw(program)),
     }
     .concretize(|s| s.split('"'))
