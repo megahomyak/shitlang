@@ -1,29 +1,14 @@
-mod pos;
-use pos::Pos;
+pub struct Offset(usize);
+pub struct Positioned<T>(Offset, T);
 
-struct Positioned<T> {
-    pub pos: Pos,
-    pub content: T,
-}
-
-enum Expression {
+pub struct Error {
 
 }
 
-struct Assignment {
-    pub name: String,
-    pub value: Positioned<Expression>,
-}
+type Result<T> = std::iter::Peekable<std::result::Result<Positioned<T>, Positioned<Error>>>;
 
 struct Program {
-    pub assignments: Vec<Positioned<Assignment>>,
-}
-
-struct Positioned<T> {
-    pub pos: pos::Pos,
-    pub contents: T,
-}
-
-pub fn parse() -> Positioned<Program> {
 
 }
+
+fn parse(i: Input) -> Result<Program> {}
