@@ -31,51 +31,40 @@ pub enum Position {
     EndOfFile,
 }
 
+pub struct ByteOffset(usize);
 pub struct Inclusive<T>(T);
 pub struct Exclusive<T>(T);
 
-pub struct Range {
-    beginning: Inclusive<Position>,
-    end: Exclusive<Position>,
+pub enum Range {
+    EndOfInput,
+    ToEndOfInput { beginning: Inclusive<ByteOffset> },
+
 }
 
-pub mod function {
-    pub enum Error {
-
-    }
-
-    pub struct Function {
-        pub content: Program,
-    }
-}
-pub use function::Function;
-
-pub mod if_else {
-    pub enum Error {}
-
-    pub struct IfElse {
-        pub if_branch: Program,
-        pub else_branch: Program,
-    }
-}
-pub use if_else::IfElse;
-
-pub mod shit_loop {
-    pub enum Error {}
-
-    pub struct Loop {
-        pub content: Program,
-    }
+pub struct Function {
+    pub content: Program,
 }
 
-pub mod variable_name {
-    pub enum Error {}
+pub enum FunctionError {}
 
-    pub struct VariableName {
-        pub content: String,
-    }
+pub struct IfElse {
+    pub if_branch: Program,
+    pub else_branch: Program,
+}
 
-impl VariableName {
+pub enum IfElseError {}
+
+pub struct Loop {
+    pub content: Program,
+}
+
+pub enum LoopError {}
+
+pub struct Name {
+    pub content: String,
+}
+
+impl Name {
     pub fn parse(mut input: Input) -> ShitResult<Self, ()> {
         let mut content = String::new();
         while let Some((_i, c)) = input.peek() {
@@ -95,33 +84,58 @@ impl VariableName {
     }
 }
 
+pub enum NameError {}
+
+pub struct ShitString {
+    pub content: String,
 }
 
-mod string {
-    pub enum Error {}
+pub enum StringError {}
 
-    pub struct ShitString {
-        pub content: String,
-    }
-}
+pub struct Import {}
 
-mod expression {
+pub enum ImportError {}
+
 pub enum Expression {
     Function(Function),
     String(ShitString),
-    VariableName(VariableName),
+    Name(Name),
     IfElse(IfElse),
     Loop(Loop),
+    Import(Import),
 }
-}
-
-mod assignment {
-    pub enum Error {}
 
 pub struct Assignment {
-    pub name: VariableName,
+    pub name: Name,
     pub value: Expression,
 }
+
+pub enum AssignmentError {
+    MissingName,
+    MissingEqualsSign,
+    MissingExpression,
+}
+
+impl Assignment {
+    fn parse(input: Input) -> ShitResult<Self, AssignmentError> {
+        let input = skip_whitespace(input);
+        let Ok((var_name, input)) = Name::parse(input.clone()) else {
+            return Err(Error {
+                range: make_range(match input.peek() {
+                    Some((i, _c)) => Position::ByteOffset(i),
+                    None => Position::EndOfFile,
+                }),
+                kind: AssignmentError::MissingName,
+            });
+        };
+        let input = skip_whitespace(input);
+        match input.peek() {
+            None => Err(Error {
+                range: make_range(Position::EndOfFile),
+                kind: ErrorKind::
+            }),
+        }
+    }
 }
 
 pub struct Program {
@@ -129,9 +143,7 @@ pub struct Program {
 }
 
 pub enum ErrorKind {
-    AssignmentError(AssignmentError)
-    MissingNameInAssignment,
-    MissingEqualsSignInAssignment,
+    AssignmentError(AssignmentError),
 }
 
 pub struct Error {
@@ -156,25 +168,6 @@ fn make_range<T: Clone>(item: T) -> std::ops::RangeInclusive<T> {
 }
 
 impl Program {
-    fn parse(input: Input) -> ShitResult<Self, Error> {
-        let input = skip_whitespace(input);
-        let Ok((var_name, input)) = VariableName::parse(input.clone()) else {
-            return Err(Error {
-                range: make_range(match input.peek() {
-                    Some((i, _c)) => Position::ByteOffset(i),
-                    None => Position::EndOfFile,
-                }),
-                kind: ErrorKind::MissingNameInAssignment,
-            });
-        };
-        let input = skip_whitespace(input);
-        match input.peek() {
-            None => Err(Error {
-                range: make_range(Position::EndOfFile),
-                kind: ErrorKind::
-            }),
-        }
-    }
 }
 
 pub fn parse(input: &str) -> Result<Program, Error> {
