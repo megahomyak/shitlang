@@ -31,6 +31,14 @@ pub enum Position {
     EndOfFile,
 }
 
+pub struct Inclusive<T>(T);
+pub struct Exclusive<T>(T);
+
+pub struct Range {
+    beginning: Inclusive<Position>,
+    end: Exclusive<Position>,
+}
+
 pub mod function {
     pub enum Error {
 
@@ -52,7 +60,7 @@ pub mod if_else {
 }
 pub use if_else::IfElse;
 
-pub mod loop {
+pub mod shit_loop {
     pub enum Error {}
 
     pub struct Loop {
@@ -60,9 +68,12 @@ pub mod loop {
     }
 }
 
-pub struct VariableName {
-    pub content: String,
-}
+pub mod variable_name {
+    pub enum Error {}
+
+    pub struct VariableName {
+        pub content: String,
+    }
 
 impl VariableName {
     pub fn parse(mut input: Input) -> ShitResult<Self, ()> {
@@ -84,10 +95,17 @@ impl VariableName {
     }
 }
 
-pub struct ShitString {
-    pub content: String,
 }
 
+mod string {
+    pub enum Error {}
+
+    pub struct ShitString {
+        pub content: String,
+    }
+}
+
+mod expression {
 pub enum Expression {
     Function(Function),
     String(ShitString),
@@ -95,17 +113,20 @@ pub enum Expression {
     IfElse(IfElse),
     Loop(Loop),
 }
+}
+
+mod assignment {
+    pub enum Error {}
 
 pub struct Assignment {
     pub name: VariableName,
     pub value: Expression,
 }
+}
 
 pub struct Program {
     pub assignments: Vec<Assignment>,
 }
-
-pub enum AssignmentError
 
 pub enum ErrorKind {
     AssignmentError(AssignmentError)
