@@ -1,5 +1,5 @@
 mod input {
-    #[derive(Clone, Copy)]
+    #[derive(Clone)]
     pub(super) struct Input<'a> {
         s: &'a str,
         index: usize,
@@ -64,7 +64,7 @@ mod utils {
             }
             return Err(());
         }
-        match parse_word_char(input) {
+        match parse_word_char(input.clone()) {
             Err(()) => Ok(((), input)),
             Ok(_) => Err(()),
         }
@@ -72,7 +72,7 @@ mod utils {
 
     pub(super) fn skip_whitespace(mut input: Input) -> Input {
         loop {
-            let input_backup = input;
+            let input_backup = input.clone();
             match input.next() {
                 None => return input,
                 Some((_i, c)) => {
@@ -84,12 +84,8 @@ mod utils {
         }
     }
 
-    pub(super) fn one_item_range<T: Clone>(item: T) -> std::ops::RangeInclusive<T> {
-        item.clone()..=item
-    }
-
     pub(super) type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
-    pub(super) type Range = std::ops::RangeInclusive<Position>;
+    pub(super) type Span = std::ops::RangeInclusive<Position>;
 }
 use utils::*;
 
@@ -152,21 +148,51 @@ pub mod string {
     }
 
     pub(super) fn parse(input: Input) -> ShitResult<ShitString, Option<Error>> {
-        let mut opening_position = input;
+        let opening_index = match input.clone().next() {
+            None => return Err(None),
+            Some((i, _c)) => i,
+        };
         let mut input = match parse_beginning_marker(input) {
             Err(()) => return Err(None),
             Ok(((), input)) => input,
         };
+        let mut content = String::new();
         while let Some((i, c)) = input.next() {
-
+            match c {
+                '\\' => {
+                    let sequence_beginning_index = i;
+                    match input.next() {
+                        None => {
+                            return Err(Some(Error::EscapeCharacterAtEndOfInput {
+                                escape_sequence_span: Position::ByteOffset(sequence_beginning_index)
+                                    ..=Position::EndOfFile,
+                            }));
+                        }
+                        Some((_i, c @ ('\\' | '"'))) => content.push(c),
+                        Some((i, _c)) => {
+                            return Err(Some(Error::UnknownCharacterEscaped {
+                                escape_sequence_span: Position::ByteOffset(sequence_beginning_index)
+                                    ..=Position::ByteOffset(i),
+                            }));
+                        }
+                    }
+                }
+                '"' => {
+                    content.shrink_to_fit();
+                    return Ok((ShitString { content }, input));
+                }
+                c => content.push(c),
+            }
         }
-        Err(Some(Error))
+        Err(Some(Error::UnclosedQuote {
+            string_span: Position::ByteOffset(opening_index)..=Position::EndOfFile,
+        }))
     }
 
     pub enum Error {
-        UnclosedQuote {
-            string: 
-        }
+        UnclosedQuote { string_span: Span },
+        EscapeCharacterAtEndOfInput { escape_sequence_span: Span },
+        UnknownCharacterEscaped { escape_sequence_span: Span },
     }
 }
 pub use string::ShitString;
@@ -247,11 +273,6 @@ pub use program::Program;
 pub enum Position {
     ByteOffset(usize),
     EndOfFile,
-}
-
-pub struct Error<Kind> {
-    pub range: std::ops::RangeInclusive<Position>,
-    pub kind: Kind,
 }
 
 pub fn parse(input: &str) -> Result<Program, Error<AssignmentError>> {
