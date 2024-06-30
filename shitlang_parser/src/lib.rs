@@ -21,6 +21,42 @@ mod input {
 }
 use input::Input;
 
+mod result {
+    use super::*;
+
+    pub(super) struct Unrecoverable<E>(E);
+    pub(super) struct Recoverable;
+    pub(super) enum Errors<E> {
+        Unrecoverable(Unrecoverable<E>),
+        Recoverable(Recoverable),
+    }
+
+    pub(super) enum ShitResult<T, E> {
+        Ok(T),
+        Err(E),
+    }
+
+    impl<T, E> ShitResult<T, E> {
+        pub fn failed(&self) -> bool {
+            matches!(self, ShitResult::Err(_))
+        }
+
+        pub fn succeeded(&self) -> bool {
+            matches!(self, ShitResult::Ok(_))
+        }
+    }
+
+    impl<T> ShitResult<T, Recoverable> {
+        pub fn or<E>(self, f: impl Fn() -> ShitResult<T, E>) -> ShitResult<T, E> {
+            match self {
+                ShitResult::Ok(t) => ShitResult::Ok(t),
+                ShitResult::Err(Recoverable) => f(),
+            }
+        }
+    }
+}
+use result::ShitResult;
+
 mod utils {
     use super::*;
 
@@ -37,8 +73,8 @@ mod utils {
     }
 
     pub(super) fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-        if string::parse_beginning_marker(input.clone()).is_err()
-            && assignment::parse_separator(input.clone()).is_err()
+        if string::parse_opening_marker(input).failed()
+            && assignment::parse_separator(input).failed()
         {
             match input.next() {
                 None => (),
@@ -64,7 +100,7 @@ mod utils {
             }
             return Err(());
         }
-        match parse_word_char(input.clone()) {
+        match parse_word_char(input) {
             Err(()) => Ok(((), input)),
             Ok(_) => Err(()),
         }
@@ -72,7 +108,7 @@ mod utils {
 
     pub(super) fn skip_whitespace(mut input: Input) -> Input {
         loop {
-            let input_backup = input.clone();
+            let input_backup = input;
             match input.next() {
                 None => return input,
                 Some((_i, c)) => {
@@ -84,7 +120,6 @@ mod utils {
         }
     }
 
-    pub(super) type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
     pub(super) type Span = std::ops::RangeInclusive<Position>;
 }
 use utils::*;
@@ -130,13 +165,16 @@ pub mod name {
         pub content: String,
     }
 
+    /*
     pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {
-        if (import::parse_opening_marker(input.clone()).
-            || matches!(function::parse(input.clone()), Err(None))
-            || matches!(shit_loop::parse(input.clone()), Err(None))
-            || matches!(if_else::parse(input.clone()), Err(None)))
+        if (import::parse_opening_marker(input)
+            || matches!(function::parse_opening_marker(input), Err(None))
+            || matches!(shit_loop::parse_opening_marker(input), Err(None))
+            || matches!(if_else::parse_opening_marker(input), Err(None)))
+            || matches!(if_else::parse_branch_separator(input), Err(None)))
         {}
     }
+    */
 
     pub struct Error {}
 }
@@ -149,7 +187,7 @@ pub mod string {
         pub content: String,
     }
 
-    pub(super) fn parse_beginning_marker(input: Input) -> ShitResult<(), ()> {
+    pub(super) fn parse_opening_marker(input: Input) -> ShitResult<(), ()> {
         match parse_char(input, '"') {
             Err(()) => Err(()),
             Ok(((), input)) => Ok(((), input)),
@@ -161,7 +199,7 @@ pub mod string {
             None => return Err(None),
             Some((i, _c)) => i,
         };
-        let mut input = match parse_beginning_marker(input) {
+        let mut input = match parse_opening_marker(input) {
             Err(()) => return Err(None),
             Ok(((), input)) => input,
         };
@@ -209,13 +247,30 @@ pub use string::ShitString;
 pub mod import {
     use super::*;
 
-    pub(super) fn parse() {}
+    pub(super) fn parse(input: Input) -> ShitResult<Import, Option<Error>> {
+        let input = match parse_opening_marker(input) {
+            Err(()) => return Err(None),
+            Ok(((), input)) => input,
+        };
+        let input = skip_whitespace(input);
+        let (string, input) = match string::parse(input) {
+            Ok((string, input)) => (string, input),
+            Err(Some(error)) => return Err(Some(Error::))
+        };
+        Ok((Import { file_path }, input))
+    }
 
-    pub(super) fn parse() {}
+    pub(super) fn parse_opening_marker(input: Input) -> ShitResult<(), ()> {
+        parse_known_word(input, "import")
+    }
 
-    pub struct Import {}
+    pub struct Import {
+        pub file_path: ShitString,
+    }
 
-    pub enum Error {}
+    pub enum Error {
+        
+    }
 }
 pub use import::Import;
 
@@ -241,7 +296,7 @@ pub mod assignment {
         pub value: Expression,
     }
 
-    pub enum AssignmentError {
+    pub enum Error {
         MissingName,
         MissingAssignmentSeparator,
         MissingExpression,
@@ -251,7 +306,7 @@ pub mod assignment {
         parse_char(input, '=')
     }
 
-    pub(super) fn parse(input: Input) -> ShitResult<Assignment, Option<AssignmentError>> {}
+    pub(super) fn parse(input: Input) -> ShitResult<Assignment, Option<Error>> {}
 }
 pub use assignment::Assignment;
 
@@ -277,6 +332,10 @@ pub mod program {
     }
 }
 pub use program::Program;
+
+fn parse_end_marker(input: Input) -> ShitResult<(), ()> {
+    parse_known_word(input, "end")
+}
 
 #[derive(Clone)]
 pub enum Position {
