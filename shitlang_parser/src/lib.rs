@@ -1,3 +1,5 @@
+mod different_approach;
+
 mod input {
     #[derive(Clone, Copy)]
     pub(super) struct Input<'a> {
