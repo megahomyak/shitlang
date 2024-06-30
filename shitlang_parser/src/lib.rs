@@ -1,5 +1,5 @@
 mod input {
-    #[derive(Clone)]
+    #[derive(Clone, Copy)]
     pub(super) struct Input<'a> {
         s: &'a str,
         index: usize,
@@ -37,8 +37,8 @@ mod utils {
     }
 
     pub(super) fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-        if string::parse_beginning_marker(input).is_err()
-            && assignment::parse_separator(input).is_err()
+        if string::parse_beginning_marker(input.clone()).is_err()
+            && assignment::parse_separator(input.clone()).is_err()
         {
             match input.next() {
                 None => (),
@@ -131,12 +131,11 @@ pub mod name {
     }
 
     pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {
-        if (
-            matches!(import::parse(input.clone()), Err(None))
+        if (import::parse_opening_marker(input.clone()).
             || matches!(function::parse(input.clone()), Err(None))
             || matches!(shit_loop::parse(input.clone()), Err(None))
-            || matches!(if_else::parse(input.clone()), Err(None))
-        ) {}
+            || matches!(if_else::parse(input.clone()), Err(None)))
+        {}
     }
 
     pub struct Error {}
@@ -150,8 +149,19 @@ pub mod string {
         pub content: String,
     }
 
-    pub(super) fn parse(input: Input) -> ShitResult<ShitString, Option<Error>> {
-        let mut input = match parse_char(input, '"') {
+    pub(super) fn parse_beginning_marker(input: Input) -> ShitResult<(), ()> {
+        match parse_char(input, '"') {
+            Err(()) => Err(()),
+            Ok(((), input)) => Ok(((), input)),
+        }
+    }
+
+    pub(super) fn parse(mut input: Input) -> ShitResult<ShitString, Option<Error>> {
+        let opening_index = match input.next() {
+            None => return Err(None),
+            Some((i, _c)) => i,
+        };
+        let mut input = match parse_beginning_marker(input) {
             Err(()) => return Err(None),
             Ok(((), input)) => input,
         };
@@ -198,6 +208,8 @@ pub use string::ShitString;
 
 pub mod import {
     use super::*;
+
+    pub(super) fn parse() {}
 
     pub(super) fn parse() {}
 
