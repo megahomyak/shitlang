@@ -1,37 +1,4 @@
-mod input {
-    #[derive(Clone, Copy)]
-    pub struct Input<'a> {
-        s: &'a str,
-        index: usize,
-    }
-
-    impl<'a> Input<'a> {
-        pub fn new(s: &'a str) -> Self {
-            Self { s, index: 0 }
-        }
-
-        pub fn next(&self) -> Option<(usize, char, Self)> {
-            unsafe { self.s.get_unchecked(self.index..) }.chars().next().map(|c| {
-                self.index += 
-                (self.index, c)})
-        }
-
-        pub fn peek(&self) -> Option<(usize, char)> {
-        }
-
-        pub fn advanced(&self) -> Self {
-            let mut copy = *self;
-            match self.peek() {
-                None => (),
-                Some((_i, c)) => {
-                    copy.index += c.len_utf8();
-                },
-            }
-            copy
-        }
-    }
-}
-use input::Input;
+type Input<'a> = std::str::CharIndices<'a>;
 
 #[derive(Clone)]
 pub enum Position {
@@ -62,12 +29,12 @@ pub struct Name {
     pub content: String,
 }
 
-fn parse_char(input: Input, c: char) -> ShitResult<(), ()> {
-    match input.peek() {
+fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
+    match input.next() {
         None => (),
         Some((_i, input_c)) => {
             if input_c == c {
-                return Ok(((), input.advanced()));
+                return Ok(((), input));
             }
         }
     }
@@ -92,15 +59,12 @@ fn any_matches<const N: usize>(input: Input, fns: [fn (Input) -> ShitResult<(), 
 }
 
 fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-    match input.peek() {
-        None => Err(()),
-        Some((_i, c)) => {
-            if any_matches(input.clone(), [parse_string_delimiter, parse_assignment_sign]) || c.is_whitespace() {
-                Err(())
-            } else {
-                Ok((c, input.advanced()))
-            }
-        }
+    let mut initial_input = input;
+    match 
+    if any_matches(initial_input.clone(), [parse_string_delimiter, parse_assignment_sign]) || c.is_whitespace() {
+        Err(())
+    } else {
+        Ok((input.next(), input))
     }
 }
 
