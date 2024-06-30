@@ -1,16 +1,16 @@
 mod input {
     #[derive(Clone, Copy)]
-    pub struct Input<'a> {
+    pub(super) struct Input<'a> {
         s: &'a str,
         index: usize,
     }
 
     impl<'a> Input<'a> {
-        pub fn new(s: &'a str) -> Self {
+        pub(super) fn new(s: &'a str) -> Self {
             Self { s, index: 0 }
         }
 
-        pub fn next(&mut self) -> Option<(usize, char)> {
+        pub(super) fn next(&mut self) -> Option<(usize, char)> {
             unsafe { self.s.get_unchecked(self.index..) }
                 .chars()
                 .next()
@@ -24,7 +24,7 @@ use input::Input;
 mod utils {
     use super::*;
 
-    pub fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
+    pub(super) fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
         match input.next() {
             None => (),
             Some((_i, input_c)) => {
@@ -36,9 +36,9 @@ mod utils {
         Err(())
     }
 
-    pub fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-        if ShitString::parse_delimiter(input.clone()).is_err()
-            && Assignment::parse_separator(input.clone()).is_err()
+    pub(super) fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
+        if string::parse_beginning_marker(input).is_err()
+            && assignment::parse_separator(input).is_err()
         {
             match input.next() {
                 None => (),
@@ -52,7 +52,7 @@ mod utils {
         Err(())
     }
 
-    pub fn parse_known_word<'a>(mut input: Input<'a>, word: &str) -> ShitResult<'a, (), ()> {
+    pub(super) fn parse_known_word<'a>(mut input: Input<'a>, word: &str) -> ShitResult<'a, (), ()> {
         for word_c in word.chars() {
             match input.next() {
                 None => (),
@@ -64,171 +64,194 @@ mod utils {
             }
             return Err(());
         }
-        match parse_word_char(input.clone()) {
+        match parse_word_char(input) {
             Err(()) => Ok(((), input)),
             Ok(_) => Err(()),
         }
     }
 
-    #[derive(Clone)]
-    pub enum Position {
-        ByteOffset(usize),
-        EndOfFile,
+    pub(super) fn skip_whitespace(mut input: Input) -> Input {
+        loop {
+            let input_backup = input;
+            match input.next() {
+                None => return input,
+                Some((_i, c)) => {
+                    if !c.is_whitespace() {
+                        return input_backup;
+                    }
+                }
+            }
+        }
     }
+
+    pub(super) fn one_item_range<T: Clone>(item: T) -> std::ops::RangeInclusive<T> {
+        item.clone()..=item
+    }
+
+    pub(super) type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
+    pub(super) type Range = std::ops::RangeInclusive<Position>;
 }
-pub use utils::Position;
 use utils::*;
 
-macro_rules! shit_mod {
-    ($name:ident exports $export:ident { $body:tt }) => {
-        pub mod $name {
-            use super::*;
+pub mod function {
+    use super::*;
 
-            $body
-        }
-        pub use $name::$export;
-    }
-}
-
-shit_mod! {function exports Function {
     pub struct Function {
         pub content: Program,
     }
 
     pub enum Error {}
-}}
+}
+pub use function::Function;
 
-shit_mod! {if_else exports IfElse {
+pub mod if_else {
+    use super::*;
+
     pub struct IfElse {
         pub if_branch: Program,
         pub else_branch: Program,
     }
 
     pub enum Error {}
-}}
+}
+pub use if_else::IfElse;
 
-shit_mod! {shit_loop exports Loop {
+pub mod shit_loop {
     use super::*;
 
     pub struct Loop {
         pub content: Program,
     }
 
-    pub enum LoopError {}
-}}
+    pub enum Error {}
+}
+pub use shit_loop::Loop;
 
-shit_mod! {name exports Name {
+pub mod name {
     use super::*;
 
     pub struct Name {
         pub content: String,
     }
 
-    pub(super) fn parse(input: Input) -> ShitResult {}
+    pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {}
 
-    impl Name {
-        fn parse(input: Input) -> ShitResult<Self, ()> {}
+    pub struct Error {}
+}
+pub use name::Name;
+
+pub mod string {
+    use super::*;
+
+    pub struct ShitString {
+        pub content: String,
     }
-}}
 
-pub enum NameError {}
+    pub(super) fn parse_beginning_marker(input: Input) -> ShitResult<(), ()> {
+        parse_char(input, '"')
+    }
 
-// String
+    pub(super) fn parse(input: Input) -> ShitResult<ShitString, Option<Error>> {
+        let mut opening_position = input;
+        let mut input = match parse_beginning_marker(input) {
+            Err(()) => return Err(None),
+            Ok(((), input)) => input,
+        };
+        while let Some((i, c)) = input.next() {
 
-pub struct ShitString {
-    pub content: String,
-}
+        }
+        Err(Some(Error))
+    }
 
-impl ShitString {
-    fn parse_delimiter(input: Input) -> ShitResult<(), ()> {
-        utils::parse_char(input, '"')
+    pub enum Error {
+        UnclosedQuote {
+            string: 
+        }
     }
 }
+pub use string::ShitString;
 
-pub enum StringError {}
+pub mod import {
+    use super::*;
 
-// Import
+    pub struct Import {}
 
-pub struct Import {}
-
-pub enum ImportError {}
-
-// Expression
-
-pub enum Expression {
-    Function(Function),
-    String(ShitString),
-    Name(Name),
-    IfElse(IfElse),
-    Loop(Loop),
-    Import(Import),
+    pub enum Error {}
 }
+pub use import::Import;
 
-// Assignment
+pub mod expression {
+    use super::*;
 
-pub struct Assignment {
-    pub name: Name,
-    pub value: Expression,
+    pub enum Expression {
+        Function(Function),
+        String(ShitString),
+        Name(Name),
+        IfElse(IfElse),
+        Loop(Loop),
+        Import(Import),
+    }
 }
+pub use expression::Expression;
 
-pub enum AssignmentError {
-    MissingName,
-    MissingAssignmentSeparator,
-    MissingExpression,
-}
+pub mod assignment {
+    use super::*;
 
-impl Assignment {
-    fn parse_separator(input: Input) -> ShitResult<(), ()> {
+    pub struct Assignment {
+        pub name: Name,
+        pub value: Expression,
+    }
+
+    pub enum AssignmentError {
+        MissingName,
+        MissingAssignmentSeparator,
+        MissingExpression,
+    }
+
+    pub(super) fn parse_separator(input: Input) -> ShitResult<(), ()> {
         parse_char(input, '=')
     }
 
-    fn parse(input: Input) -> ShitResult<Self, Option<AssignmentError>> {}
+    pub(super) fn parse(input: Input) -> ShitResult<Assignment, Option<AssignmentError>> {}
 }
+pub use assignment::Assignment;
 
-// Statement
+pub mod statement {
+    use super::*;
 
-pub enum Statement {
-    Assignment(Assignment),
-    Expression(Expression),
+    pub enum Statement {
+        Assignment(Assignment),
+        Expression(Expression),
+    }
 }
+pub use statement::Statement;
 
-pub struct Program {
-    pub statements: Vec<Statement>,
+pub mod program {
+    use super::*;
+
+    pub struct Program {
+        pub statements: Vec<Statement>,
+    }
+
+    pub(super) fn parse_end_marker(input: Input) -> ShitResult<(), ()> {
+        parse_known_word(input, "end")
+    }
+
+    pub(super) fn parse(input: Input) -> ShitResult<Program, Error<AssignmentError>> {
+        let mut assignments = Vec::new();
+    }
+}
+pub use program::Program;
+
+#[derive(Clone)]
+pub enum Position {
+    ByteOffset(usize),
+    EndOfFile,
 }
 
 pub struct Error<Kind> {
     pub range: std::ops::RangeInclusive<Position>,
     pub kind: Kind,
-}
-
-type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
-
-fn skip_whitespace(mut input: Input) -> Input {
-    loop {
-        let input_backup = input.clone();
-        match input.next() {
-            None => return input,
-            Some((_i, c)) => {
-                if !c.is_whitespace() {
-                    return input_backup;
-                }
-            }
-        }
-    }
-}
-
-fn one_item_range<T: Clone>(item: T) -> std::ops::RangeInclusive<T> {
-    item.clone()..=item
-}
-
-impl Program {
-    fn parse_end_marker(input: Input) -> ShitResult<(), ()> {
-        parse_known_word(input, "end")
-    }
-
-    fn parse(input: Input) -> ShitResult<Program, Error<AssignmentError>> {
-        let mut assignments = Vec::new();
-    }
 }
 
 pub fn parse(input: &str) -> Result<Program, Error<AssignmentError>> {
