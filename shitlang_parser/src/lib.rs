@@ -29,29 +29,19 @@ pub struct Name {
     pub content: String,
 }
 
-fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
-    match input.next() {
-        None => (),
-        Some((_i, input_c)) => {
-            if input_c == c {
-                return Ok(((), input));
-            }
-        }
-    }
-    Err(())
+fn parse_string_delimiter(c: char, input: Input) -> bool {
+
 }
 
-fn parse_string_delimiter(input: Input) -> ShitResult<(), ()> {
-    parse_char(input, '"')
-}
-
-fn parse_assignment_sign(input: Input) -> ShitResult<(), ()> {
+fn parse_assignment_sign(c: char, input: Input) -> ShitResult<(), ()> {
     parse_char(input, '=')
 }
 
-fn any_matches<const N: usize>(input: Input, fns: [fn (Input) -> ShitResult<(), ()>; N]) -> bool {
-    for fn_ in &fns {
-        if fn_(input.clone()).is_ok() {
+const END: &str = "end";
+
+fn any_matches<const N: usize>(c: char, input: Input, parsers: [fn (char, Input) -> bool; N]) -> bool {
+    for parser in &parsers {
+        if parser(c, input.clone()) {
             return false;
         }
     }
@@ -60,7 +50,15 @@ fn any_matches<const N: usize>(input: Input, fns: [fn (Input) -> ShitResult<(), 
 
 fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
     let mut initial_input = input;
-    match 
+    match input.next() {
+        None => (),
+        Some((i, c)) => {
+            if !c.is_whitespace() {
+                return Ok((c, ))
+            }
+        }
+    }
+    Err(())
     if any_matches(initial_input.clone(), [parse_string_delimiter, parse_assignment_sign]) || c.is_whitespace() {
         Err(())
     } else {
