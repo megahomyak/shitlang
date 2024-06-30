@@ -24,6 +24,22 @@ use input::Input;
 mod utils {
     use super::*;
 
+    trait CharPattern {
+        fn check(&self, c: char) -> bool;
+    }
+
+    impl CharPattern for char {
+        fn check(&self, c: char) -> bool {
+            *self == c
+        }
+    }
+
+    impl CharPattern for Fn(char) -> bool {
+        fn check(&self, c: char) -> bool {
+            self(c)
+        }
+    }
+
     pub(super) fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
         match input.next() {
             None => (),
@@ -148,6 +164,7 @@ pub mod string {
     }
 
     pub(super) fn parse(input: Input) -> ShitResult<ShitString, Option<Error>> {
+        parse_char(input, '"')
         let opening_index = match input.clone().next() {
             None => return Err(None),
             Some((i, _c)) => i,
@@ -200,6 +217,8 @@ pub use string::ShitString;
 pub mod import {
     use super::*;
 
+    pub(super) parse()
+
     pub struct Import {}
 
     pub enum Error {}
@@ -212,7 +231,7 @@ pub mod expression {
     pub enum Expression {
         Function(Function),
         String(ShitString),
-        Name(Name),
+        Name(Name, Span),
         IfElse(IfElse),
         Loop(Loop),
         Import(Import),
@@ -257,10 +276,6 @@ pub mod program {
 
     pub struct Program {
         pub statements: Vec<Statement>,
-    }
-
-    pub(super) fn parse_end_marker(input: Input) -> ShitResult<(), ()> {
-        parse_known_word(input, "end")
     }
 
     pub(super) fn parse(input: Input) -> ShitResult<Program, Error<AssignmentError>> {
