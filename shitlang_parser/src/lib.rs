@@ -21,42 +21,6 @@ mod input {
 }
 use input::Input;
 
-mod result {
-    use super::*;
-
-    pub(super) struct Unrecoverable<E>(E);
-    pub(super) struct Recoverable;
-    pub(super) enum Errors<E> {
-        Unrecoverable(Unrecoverable<E>),
-        Recoverable(Recoverable),
-    }
-
-    pub(super) enum ShitResult<T, E> {
-        Ok(T),
-        Err(E),
-    }
-
-    impl<T, E> ShitResult<T, E> {
-        pub fn failed(&self) -> bool {
-            matches!(self, ShitResult::Err(_))
-        }
-
-        pub fn succeeded(&self) -> bool {
-            matches!(self, ShitResult::Ok(_))
-        }
-    }
-
-    impl<T> ShitResult<T, Recoverable> {
-        pub fn or<E>(self, f: impl Fn() -> ShitResult<T, E>) -> ShitResult<T, E> {
-            match self {
-                ShitResult::Ok(t) => ShitResult::Ok(t),
-                ShitResult::Err(Recoverable) => f(),
-            }
-        }
-    }
-}
-use result::ShitResult;
-
 mod utils {
     use super::*;
 
@@ -73,8 +37,8 @@ mod utils {
     }
 
     pub(super) fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-        if string::parse_opening_marker(input).failed()
-            && assignment::parse_separator(input).failed()
+        if string::parse_opening_marker(input).is_err()
+            && assignment::parse_separator(input).is_err()
         {
             match input.next() {
                 None => (),
@@ -120,6 +84,7 @@ mod utils {
         }
     }
 
+    pub(super) type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
     pub(super) type Span = std::ops::RangeInclusive<Position>;
 }
 use utils::*;
@@ -165,16 +130,27 @@ pub mod name {
         pub content: String,
     }
 
-    /*
-    pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {
-        if (import::parse_opening_marker(input)
-            || matches!(function::parse_opening_marker(input), Err(None))
-            || matches!(shit_loop::parse_opening_marker(input), Err(None))
-            || matches!(if_else::parse_opening_marker(input), Err(None)))
-            || matches!(if_else::parse_branch_separator(input), Err(None)))
-        {}
+    pub(super) fn parse(mut input: Input) -> ShitResult<Name, ()> {
+        if import::parse_opening_marker(input).is_err()
+            && function::parse_opening_marker(input).is_err()
+            && string::parse_opening_marker(input).is_err()
+            && shit_loop::parse_opening_marker(input).is_err()
+            && if_else::parse_opening_marker(input).is_err()
+            && if_else::parse_branch_separator(input).is_err()
+            && parse_end_marker(input).is_err()
+        {
+            let mut content = String::new();
+            while let Ok((c, new_input)) = parse_word_char(input) {
+                content.push(c);
+                input = new_input;
+            }
+            if !content.is_empty() {
+                content.shrink_to_fit();
+                return Ok((Name { content }, input));
+            }
+        }
+        Err(())
     }
-    */
 
     pub struct Error {}
 }
