@@ -1,25 +1,33 @@
 mod input {
-    #[derive(Clone)]
+    #[derive(Clone, Copy)]
     pub struct Input<'a> {
-        iter_output: Option<(usize, char)>,
-        iter: std::str::CharIndices<'a>,
+        s: &'a str,
+        index: usize,
     }
 
     impl<'a> Input<'a> {
         pub fn new(s: &'a str) -> Self {
-            let mut iter = s.char_indices();
-            Self {
-                iter_output: iter.next(),
-                iter,
-            }
+            Self { s, index: 0 }
+        }
+
+        pub fn next(&self) -> Option<(usize, char, Self)> {
+            unsafe { self.s.get_unchecked(self.index..) }.chars().next().map(|c| {
+                self.index += 
+                (self.index, c)})
         }
 
         pub fn peek(&self) -> Option<(usize, char)> {
-            self.iter_output
         }
 
-        pub fn advance(&mut self) {
-            self.iter_output = self.iter.next();
+        pub fn advanced(&self) -> Self {
+            let mut copy = *self;
+            match self.peek() {
+                None => (),
+                Some((_i, c)) => {
+                    copy.index += c.len_utf8();
+                },
+            }
+            copy
         }
     }
 }
@@ -54,13 +62,12 @@ pub struct Name {
     pub content: String,
 }
 
-fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
+fn parse_char(input: Input, c: char) -> ShitResult<(), ()> {
     match input.peek() {
         None => (),
         Some((_i, input_c)) => {
             if input_c == c {
-                input.advance();
-                return Ok(((), input));
+                return Ok(((), input.advanced()));
             }
         }
     }
@@ -91,8 +98,7 @@ fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
             if any_matches(input.clone(), [parse_string_delimiter, parse_assignment_sign]) || c.is_whitespace() {
                 Err(())
             } else {
-                input.advance();
-                Ok((c, input))
+                Ok((c, input.advanced()))
             }
         }
     }
@@ -213,7 +219,7 @@ fn skip_whitespace(mut input: Input) -> Input {
         if !c.is_whitespace() {
             break;
         }
-        input.advance();
+        input = input.advanced();
     }
     input
 }
