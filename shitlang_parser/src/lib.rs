@@ -24,22 +24,6 @@ use input::Input;
 mod utils {
     use super::*;
 
-    trait CharPattern {
-        fn check(&self, c: char) -> bool;
-    }
-
-    impl CharPattern for char {
-        fn check(&self, c: char) -> bool {
-            *self == c
-        }
-    }
-
-    impl CharPattern for Fn(char) -> bool {
-        fn check(&self, c: char) -> bool {
-            self(c)
-        }
-    }
-
     pub(super) fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
         match input.next() {
             None => (),
@@ -146,7 +130,14 @@ pub mod name {
         pub content: String,
     }
 
-    pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {}
+    pub(super) fn parse(input: Input) -> ShitResult<Name, ()> {
+        if (
+            matches!(import::parse(input.clone()), Err(None))
+            || matches!(function::parse(input.clone()), Err(None))
+            || matches!(shit_loop::parse(input.clone()), Err(None))
+            || matches!(if_else::parse(input.clone()), Err(None))
+        ) {}
+    }
 
     pub struct Error {}
 }
@@ -159,17 +150,8 @@ pub mod string {
         pub content: String,
     }
 
-    pub(super) fn parse_beginning_marker(input: Input) -> ShitResult<(), ()> {
-        parse_char(input, '"')
-    }
-
     pub(super) fn parse(input: Input) -> ShitResult<ShitString, Option<Error>> {
-        parse_char(input, '"')
-        let opening_index = match input.clone().next() {
-            None => return Err(None),
-            Some((i, _c)) => i,
-        };
-        let mut input = match parse_beginning_marker(input) {
+        let mut input = match parse_char(input, '"') {
             Err(()) => return Err(None),
             Ok(((), input)) => input,
         };
@@ -217,7 +199,7 @@ pub use string::ShitString;
 pub mod import {
     use super::*;
 
-    pub(super) parse()
+    pub(super) fn parse() {}
 
     pub struct Import {}
 
