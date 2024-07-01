@@ -1,46 +1,150 @@
+// Parsing results
+
 pub enum ParsingResult<T, I, E> {
     Ok(T, I),
     Err(E),
 }
 
-impl<T, I, E> ParsingResult<T, I, E> {
-    pub fn and<NT, NI>(
-        self,
-        f: impl Fn(T, I) -> ParsingResult<NT, NI, E>,
-    ) -> ParsingResult<NT, NI, E> {
-        match self {
-            Self::Ok(t, input) => f(t, input),
-            Self::Err(e) => ParsingResult::Err(e),
-        }
-    }
+pub enum ParsingError<E> {
+    NotRecognized(),
+    Invalid(E),
+}
 
-    pub fn map<NT>(self, f: impl Fn(T) -> NT) -> ParsingResult<NT, I, E> {
-        match self {
-            Self::Ok(t, input) => ParsingResult::Ok(f(t), input),
-            Self::Err(e) => ParsingResult::Err(e),
+pub struct NotRecognized();
+
+// Input interface
+
+pub trait Input: Sized {
+    type Item;
+    type Parser: Parser<Self::Item, Self, NotRecognized>;
+
+    fn cut(&self) -> Self::Parser;
+}
+
+pub struct IterCutter();
+
+impl<I> Parser<I::Item, I, NotRecognized> for IterCutter
+where
+    I: Iterator + Clone,
+{
+    fn parse(&self, input: I) -> ParsingResult<I::Item, I, NotRecognized> {
+        let mut clone = input.clone();
+        match clone.next() {
+            None => ParsingResult::Err(NotRecognized()),
+            Some(item) => ParsingResult::Ok(item, clone),
         }
     }
 }
 
-impl<T, I, E> ParsingResult<T, I, Option<E>> {
-    pub fn or(self, f: impl Fn() -> Self) -> Self {
-        match self {
-            Self::Ok(..) => self,
-            Self::Err(None) => f(),
-            Self::Err(Some(..)) => self,
-        }
+impl<T> Input for T
+where
+    T: Iterator + Clone,
+{
+    type Item = T::Item;
+    type Parser = IterCutter;
+
+    fn cut(&self) -> Self::Parser {
+        IterCutter()
     }
 }
 
-pub fn parse_matching<T, I: Iterator, E>(
-    mut input: I,
-    checker: impl Fn(I::Item) -> Option<T>,
-) -> ParsingResult<T, I, Option<E>> {
-    match input.next() {
-        None => ParsingResult::Err(None),
-        Some(item) => match checker(item) {
-            None => ParsingResult::Err(None),
-            Some(result) => ParsingResult::Ok(result, input),
-        },
+/*
+impl<T> Input for T
+where
+    T: Iterator + Clone,
+{
+    type Item = <T as Iterator>::Item;
+
+    fn cut(&self) -> ParsingResult<Self::Item, Self, NotRecognized> {
+        let mut clone = self.clone();
+        match clone.next() {
+            None => ParsingResult::Err(NotRecognized()),
+            Some(item) => ParsingResult::Ok(item, clone),
+        }
     }
 }
+*/
+
+// Parser interface
+
+pub trait Parser<T, I, E> {
+    fn parse(&self, input: I) -> ParsingResult<T, I, E>;
+}
+
+/*
+
+impl<T, O, I, E> Parser<O, I, E> for T
+where
+    T: Fn(I) -> ParsingResult<O, I, E>,
+{
+    fn parse(&self, input: I) -> ParsingResult<O, I, E> {
+        self(input)
+    }
+}
+
+pub fn cut<I, C>(checker: C) -> impl Parser<I::Item, I, NotRecognized>
+where
+    I: Input,
+    C: Fn(&I::Item) -> bool,
+{
+    |input: I| {
+        input.cut().then(|c, input| {
+            if checker(&c) {
+                ParsingResult::Ok(c, input)
+            } else {
+                ParsingResult::Err(NotRecognized())
+            }
+        })
+    }
+}
+
+pub fn parse_repeating<T, I, C, E, P>(
+    mut collection: C,
+    input: I,
+    parser: P,
+) -> ParsingResult<C, I, E>
+where
+    I: Iterator<Item = T> + Clone,
+    C: Extend<T>,
+    P: Fn(I) -> ParsingResult<T, I, Option<E>>,
+{
+    struct Collector<P, I, E> {
+        parser: P,
+        input: I,
+        error: Option<E>,
+    }
+
+    impl<T, P, I, E> Iterator for Collector<P, I, E>
+    where
+        P: Fn(I) -> ParsingResult<T, I, Option<E>>,
+        I: Clone,
+    {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match (self.parser)(self.input.clone()) {
+                ParsingResult::Ok(t, rest) => {
+                    self.input = rest;
+                    Some(t)
+                }
+                ParsingResult::Err(None) => None,
+                ParsingResult::Err(Some(e)) => {
+                    self.error = Some(e);
+                    None
+                }
+            }
+        }
+    }
+
+    let mut collector = Collector {
+        input,
+        parser,
+        error: None,
+    };
+    collection.extend(&mut collector);
+    match collector.error {
+        Some(e) => ParsingResult::Err(e),
+        None => ParsingResult::Ok(collection, collector.input),
+    }
+}
+*/
