@@ -1,150 +1,96 @@
 // Parsing results
 
-pub enum ParsingResult<T, I, E> {
-    Ok(T, I),
+pub enum ParsingResult<O, I, E> {
+    Ok { output: O, rest_of_input: I },
     Err(E),
 }
 
-pub enum ParsingError<E> {
-    NotRecognized(),
-    Invalid(E),
-}
-
-pub struct NotRecognized();
-
 // Input interface
 
-pub trait Input: Sized {
+pub struct Exhausted();
+
+pub trait Input: Sized + Clone {
     type Item;
-    type Parser: Parser<Self::Item, Self, NotRecognized>;
 
-    fn cut(&self) -> Self::Parser;
+    fn next(&mut self) -> ParsingResult<Self::Item, Self, Exhausted>;
 }
 
-pub struct IterCutter();
-
-impl<I> Parser<I::Item, I, NotRecognized> for IterCutter
-where
-    I: Iterator + Clone,
-{
-    fn parse(&self, input: I) -> ParsingResult<I::Item, I, NotRecognized> {
-        let mut clone = input.clone();
-        match clone.next() {
-            None => ParsingResult::Err(NotRecognized()),
-            Some(item) => ParsingResult::Ok(item, clone),
-        }
-    }
-}
-
-impl<T> Input for T
-where
-    T: Iterator + Clone,
-{
+impl<T: Iterator + Clone> Input for T {
     type Item = T::Item;
-    type Parser = IterCutter;
 
-    fn cut(&self) -> Self::Parser {
-        IterCutter()
-    }
-}
-
-/*
-impl<T> Input for T
-where
-    T: Iterator + Clone,
-{
-    type Item = <T as Iterator>::Item;
-
-    fn cut(&self) -> ParsingResult<Self::Item, Self, NotRecognized> {
-        let mut clone = self.clone();
-        match clone.next() {
-            None => ParsingResult::Err(NotRecognized()),
-            Some(item) => ParsingResult::Ok(item, clone),
+    fn next(&mut self) -> ParsingResult<Self::Item, Self, Exhausted> {
+        match Iterator::next(self) {
+            None => ParsingResult::Err(Exhausted()),
+            Some(item) => ParsingResult::Ok {
+                output: item,
+                rest_of_input: self.clone(),
+            },
         }
     }
 }
-*/
 
 // Parser interface
 
-pub trait Parser<T, I, E> {
-    fn parse(&self, input: I) -> ParsingResult<T, I, E>;
+pub trait Parser<O, I, NI, E> {
+    fn parse(&self, input: I) -> ParsingResult<O, NI, E>;
 }
 
-/*
-
-impl<T, O, I, E> Parser<O, I, E> for T
-where
-    T: Fn(I) -> ParsingResult<O, I, E>,
-{
-    fn parse(&self, input: I) -> ParsingResult<O, I, E> {
+impl<T: Fn(I) -> ParsingResult<O, NI, E>, O, I, NI, E> Parser<O, I, NI, E> for T {
+    fn parse(&self, input: I) -> ParsingResult<O, NI, E> {
         self(input)
     }
 }
 
-pub fn cut<I, C>(checker: C) -> impl Parser<I::Item, I, NotRecognized>
-where
-    I: Input,
-    C: Fn(&I::Item) -> bool,
-{
-    |input: I| {
-        input.cut().then(|c, input| {
-            if checker(&c) {
-                ParsingResult::Ok(c, input)
-            } else {
-                ParsingResult::Err(NotRecognized())
-            }
-        })
-    }
+pub trait ParserExt<O, I, NI, E>: Parser<O, I, NI, E> {
+    fn then<NO, NNI, P: Parser<NO, NI, NNI, E>>(
+        &self,
+        f: impl Fn(O) -> P,
+    ) -> impl Parser<NO, I, NNI, E>;
+
+    fn or<NE, P: Parser<O, I, NI, NE>>(&self, f: impl Fn(E) -> P) -> impl Parser<O, I, NI, NE>;
+
+    fn map<NO>(&self, f: impl Fn(O) -> NO) -> impl Parser<NO, I, NI, E>;
+
+    fn map_err<NE>(&self, f: impl Fn(E) -> NE) -> impl Parser<O, I, NI, NE>;
 }
 
-pub fn parse_repeating<T, I, C, E, P>(
-    mut collection: C,
-    input: I,
-    parser: P,
-) -> ParsingResult<C, I, E>
-where
-    I: Iterator<Item = T> + Clone,
-    C: Extend<T>,
-    P: Fn(I) -> ParsingResult<T, I, Option<E>>,
-{
-    struct Collector<P, I, E> {
-        parser: P,
-        input: I,
-        error: Option<E>,
-    }
-
-    impl<T, P, I, E> Iterator for Collector<P, I, E>
-    where
-        P: Fn(I) -> ParsingResult<T, I, Option<E>>,
-        I: Clone,
-    {
-        type Item = T;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            match (self.parser)(self.input.clone()) {
-                ParsingResult::Ok(t, rest) => {
-                    self.input = rest;
-                    Some(t)
-                }
-                ParsingResult::Err(None) => None,
-                ParsingResult::Err(Some(e)) => {
-                    self.error = Some(e);
-                    None
-                }
-            }
+impl<T: Parser<O, I, NI, E>, O, I, NI, E> ParserExt<O, I, NI, E> for T {
+    fn then<NO, NNI, P: Parser<NO, NI, NNI, E>>(
+        &self,
+        f: impl Fn(O) -> P,
+    ) -> impl Parser<NO, I, NNI, E> {
+        move |input| match self.parse(input) {
+            ParsingResult::Err(e) => ParsingResult::Err(e),
+            ParsingResult::Ok {
+                output,
+                rest_of_input,
+            } => f(output).parse(rest_of_input),
         }
     }
 
-    let mut collector = Collector {
-        input,
-        parser,
-        error: None,
-    };
-    collection.extend(&mut collector);
-    match collector.error {
-        Some(e) => ParsingResult::Err(e),
-        None => ParsingResult::Ok(collection, collector.input),
+    fn or<NE, P: Parser<O, I, NI, NE>>(&self, f: impl Fn(E) -> P) -> impl Parser<O, I, NI, NE> {
+        move |input| match self.parse(input) {
+            ParsingResult::Ok {
+                output,
+                rest_of_input,
+            } => ParsingResult::Ok {
+                output,
+                rest_of_input,
+            },
+            ParsingResult::Err(e) => f(e).parse(input),
+        }
     }
 }
-*/
+
+// Combinators
+
+pub fn cut<I: Input>(f: impl Fn(&I::Item) -> bool) -> impl Parser<I::Item, I, NotRecognized()> {
+    move |input: I| {
+        if let Some((item, rest)) = input.cut() {
+            if f(&item) {
+                return ParsingResult::Ok(item, rest);
+            }
+        }
+        ParsingResult::Err(NotRecognized())
+    }
+}
