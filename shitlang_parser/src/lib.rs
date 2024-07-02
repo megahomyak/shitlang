@@ -1,326 +1,131 @@
-mod different_approach;
+// Utilities
 
-mod input {
-    #[derive(Clone, Copy)]
-    pub(super) struct Input<'a> {
-        s: &'a str,
-        index: usize,
-    }
+type Input<'a> = std::str::CharIndices<'a>;
 
-    impl<'a> Input<'a> {
-        pub(super) fn new(s: &'a str) -> Self {
-            Self { s, index: 0 }
-        }
-
-        pub(super) fn next(&mut self) -> Option<(usize, char)> {
-            unsafe { self.s.get_unchecked(self.index..) }
-                .chars()
-                .next()
-                .map(|c| (self.index, c))
-                .inspect(|(_i, c)| self.index += c.len_utf8())
-        }
-    }
-}
-use input::Input;
-
-mod utils {
-    use super::*;
-
-    pub(super) fn parse_char(mut input: Input, c: char) -> ShitResult<(), ()> {
-        match input.next() {
-            None => (),
-            Some((_i, input_c)) => {
-                if input_c == c {
-                    return Ok(((), input));
-                }
-            }
-        }
-        Err(())
-    }
-
-    pub(super) fn parse_word_char(mut input: Input) -> ShitResult<char, ()> {
-        if string::parse_opening_marker(input).is_err()
-            && assignment::parse_separator(input).is_err()
-        {
-            match input.next() {
-                None => (),
-                Some((_i, c)) => {
-                    if !c.is_whitespace() {
-                        return Ok((c, input));
-                    }
-                }
-            }
-        }
-        Err(())
-    }
-
-    pub(super) fn parse_known_word<'a>(mut input: Input<'a>, word: &str) -> ShitResult<'a, (), ()> {
-        for word_c in word.chars() {
-            match input.next() {
-                None => (),
-                Some((_i, c)) => {
-                    if word_c == c {
-                        continue;
-                    }
-                }
-            }
-            return Err(());
-        }
-        match parse_word_char(input) {
-            Err(()) => Ok(((), input)),
-            Ok(_) => Err(()),
-        }
-    }
-
-    pub(super) fn skip_whitespace(mut input: Input) -> Input {
-        loop {
-            let input_backup = input;
-            match input.next() {
-                None => return input,
-                Some((_i, c)) => {
-                    if !c.is_whitespace() {
-                        return input_backup;
-                    }
-                }
-            }
-        }
-    }
-
-    pub(super) type ShitResult<'a, T, E> = Result<(T, Input<'a>), E>;
-    pub(super) type Span = std::ops::RangeInclusive<Position>;
-}
-use utils::*;
-
-pub mod function {
-    use super::*;
-
-    pub struct Function {
-        pub content: Program,
-    }
-
-    pub enum Error {}
-}
-pub use function::Function;
-
-pub mod if_else {
-    use super::*;
-
-    pub struct IfElse {
-        pub if_branch: Program,
-        pub else_branch: Program,
-    }
-
-    pub enum Error {}
-}
-pub use if_else::IfElse;
-
-pub mod shit_loop {
-    use super::*;
-
-    pub struct Loop {
-        pub content: Program,
-    }
-
-    pub enum Error {}
-}
-pub use shit_loop::Loop;
-
-pub mod name {
-    use super::*;
-
-    pub struct Name {
-        pub content: String,
-    }
-
-    pub(super) fn parse(mut input: Input) -> ShitResult<Name, ()> {
-        if import::parse_opening_marker(input).is_err()
-            && function::parse_opening_marker(input).is_err()
-            && string::parse_opening_marker(input).is_err()
-            && shit_loop::parse_opening_marker(input).is_err()
-            && if_else::parse_opening_marker(input).is_err()
-            && if_else::parse_branch_separator(input).is_err()
-            && parse_end_marker(input).is_err()
-        {
-            let mut content = String::new();
-            while let Ok((c, new_input)) = parse_word_char(input) {
-                content.push(c);
-                input = new_input;
-            }
-            if !content.is_empty() {
-                content.shrink_to_fit();
-                return Ok((Name { content }, input));
-            }
-        }
-        Err(())
-    }
-
-    pub struct Error {}
-}
-pub use name::Name;
-
-pub mod string {
-    use super::*;
-
-    pub struct ShitString {
-        pub content: String,
-    }
-
-    pub(super) fn parse_opening_marker(input: Input) -> ShitResult<(), ()> {
-        match parse_char(input, '"') {
-            Err(()) => Err(()),
-            Ok(((), input)) => Ok(((), input)),
-        }
-    }
-
-    pub(super) fn parse(mut input: Input) -> ShitResult<ShitString, Option<Error>> {
-        let opening_index = match input.next() {
-            None => return Err(None),
-            Some((i, _c)) => i,
-        };
-        let mut input = match parse_opening_marker(input) {
-            Err(()) => return Err(None),
-            Ok(((), input)) => input,
-        };
-        let mut content = String::new();
-        while let Some((i, c)) = input.next() {
-            match c {
-                '\\' => {
-                    let sequence_beginning_index = i;
-                    match input.next() {
-                        None => {
-                            return Err(Some(Error::EscapeCharacterAtEndOfInput {
-                                escape_sequence_span: Position::ByteOffset(sequence_beginning_index)
-                                    ..=Position::EndOfFile,
-                            }));
-                        }
-                        Some((_i, c @ ('\\' | '"'))) => content.push(c),
-                        Some((i, _c)) => {
-                            return Err(Some(Error::UnknownCharacterEscaped {
-                                escape_sequence_span: Position::ByteOffset(sequence_beginning_index)
-                                    ..=Position::ByteOffset(i),
-                            }));
-                        }
-                    }
-                }
-                '"' => {
-                    content.shrink_to_fit();
-                    return Ok((ShitString { content }, input));
-                }
-                c => content.push(c),
-            }
-        }
-        Err(Some(Error::UnclosedQuote {
-            string_span: Position::ByteOffset(opening_index)..=Position::EndOfFile,
-        }))
-    }
-
-    pub enum Error {
-        UnclosedQuote { string_span: Span },
-        EscapeCharacterAtEndOfInput { escape_sequence_span: Span },
-        UnknownCharacterEscaped { escape_sequence_span: Span },
-    }
-}
-pub use string::ShitString;
-
-pub mod import {
-    use super::*;
-
-    pub(super) fn parse(input: Input) -> ShitResult<Import, Option<Error>> {
-        let input = match parse_opening_marker(input) {
-            Err(()) => return Err(None),
-            Ok(((), input)) => input,
-        };
-        let input = skip_whitespace(input);
-        let (string, input) = match string::parse(input) {
-            Ok((string, input)) => (string, input),
-            Err(Some(error)) => return Err(Some(Error::))
-        };
-        Ok((Import { file_path }, input))
-    }
-
-    pub(super) fn parse_opening_marker(input: Input) -> ShitResult<(), ()> {
-        parse_known_word(input, "import")
-    }
-
-    pub struct Import {
-        pub file_path: ShitString,
-    }
-
-    pub enum Error {
-        
-    }
-}
-pub use import::Import;
-
-pub mod expression {
-    use super::*;
-
-    pub enum Expression {
-        Function(Function),
-        String(ShitString),
-        Name(Name, Span),
-        IfElse(IfElse),
-        Loop(Loop),
-        Import(Import),
-    }
-}
-pub use expression::Expression;
-
-pub mod assignment {
-    use super::*;
-
-    pub struct Assignment {
-        pub name: Name,
-        pub value: Expression,
-    }
-
-    pub enum Error {
-        MissingName,
-        MissingAssignmentSeparator,
-        MissingExpression,
-    }
-
-    pub(super) fn parse_separator(input: Input) -> ShitResult<(), ()> {
-        parse_char(input, '=')
-    }
-
-    pub(super) fn parse(input: Input) -> ShitResult<Assignment, Option<Error>> {}
-}
-pub use assignment::Assignment;
-
-pub mod statement {
-    use super::*;
-
-    pub enum Statement {
-        Assignment(Assignment),
-        Expression(Expression),
-    }
-}
-pub use statement::Statement;
-
-pub mod program {
-    use super::*;
-
-    pub struct Program {
-        pub statements: Vec<Statement>,
-    }
-
-    pub(super) fn parse(input: Input) -> ShitResult<Program, Error<AssignmentError>> {
-        let mut assignments = Vec::new();
-    }
-}
-pub use program::Program;
-
-fn parse_end_marker(input: Input) -> ShitResult<(), ()> {
-    parse_known_word(input, "end")
+trait ShitParser<'a, O, E>: parser_combinators::Parser<O, Input<'a>, Input<'a>, E> {}
+impl<'a, T: parser_combinators::Parser<O, Input<'a>, Input<'a>, E>, O, E> ShitParser<'a, O, E>
+    for T
+{
 }
 
-#[derive(Clone)]
+enum ParsingError {
+    Recoverable(),
+    Unrecoverable(Error),
+}
+use ParsingError::{Recoverable, Unrecoverable};
+
+type Span = std::ops::RangeInclusive<Position>;
+
+use parser_combinators::cut;
+use parser_combinators::ParserExt;
+use parser_combinators::PredicateCuttingError::{self, NotMatched};
+
+fn cut_exact<'a>(
+    pattern: char,
+) -> impl ShitParser<'a, <Input<'a> as Iterator>::Item, PredicateCuttingError> {
+    cut(move |(_i, c)| *c == pattern)
+}
+
+fn cut_any<'a>() -> impl ShitParser<'a, <Input<'a> as Iterator>::Item, PredicateCuttingError> {
+    cut(|_| true)
+}
+
+fn unrec<O>(e: Error) -> impl ShitParser<'a, O, ParsingError> {
+    |input| parser_combinators::ParsingResult::Err(ParsingError::Unrecoverable(e))
+}
+
+// Output
+
 pub enum Position {
+    EndOfInput,
     ByteOffset(usize),
-    EndOfFile,
+}
+use Position::{ByteOffset, EndOfInput};
+
+pub enum Error {
+    NoCharacterAfterEscapeCharacterInString { escape_sequence_span: Span },
+    UnexpectedCharacterEscapedInString { escape_sequence_span: Span },
 }
 
-pub fn parse(input: &str) -> Result<Program, Error<AssignmentError>> {
-    Program::parse(Input::new(input)).map(|(program, _rest)| program)
+pub struct Whitespace();
+pub struct EndingMark();
+
+pub struct IfBeginningMark();
+pub struct IfProgram(Program);
+pub struct ElseBeginningMark();
+pub struct ElseProgram(Program);
+pub struct IfElse(IfBeginningMark, IfProgram, ElseBeginningMark, ElseProgram);
+
+pub struct LoopBeginningMark();
+pub struct LoopBody(Program);
+pub struct LoopEndingMark();
+pub struct Loop(LoopBeginningMark, LoopBody, EndingMark);
+
+pub struct EscapedStringContentChar(char);
+fn parse_escaped_string_content_char<'a>(
+) -> impl ShitParser<'a, EscapedStringContentChar, ParsingError> {
+    cut('\\').and(|(span_beginning, _c)| cut('\\').or(cut('"')))
+    cut_exact('\\')
+        .map_err(|NotMatched()| Recoverable())
+        .then(|(span_beginning, _c)| {
+            cut_exact('\\')
+                .or(|NotMatched()| cut_exact('"'))
+                .map(|(_i, c)| EscapedStringContentChar(c))
+                .or(|NotMatched()| {
+                    cut_any()
+                        .map_err(|NotMatched()| {
+                            Unrecoverable(Error::NoCharacterAfterEscapeCharacterInString {
+                                escape_sequence_span: ByteOffset(span_beginning)..=EndOfInput,
+                            })
+                        })
+                        .then(|(span_end, _c)| {
+                            |_input| {
+                                parser_combinators::ParsingResult::Err(ParsingError::Unrecoverable(
+                                    Error::UnexpectedCharacterEscapedInString {
+                                        escape_sequence_span: ByteOffset(span_beginning)
+                                            ..=ByteOffset(span_end),
+                                    },
+                                ))
+                            }
+                        })
+                })
+        })
 }
+pub struct UnescapedStringContentChar(char);
+pub enum StringContentChar {
+    EscapedStringContentChar(EscapedStringContentChar),
+    UnescapedStringContentChar(UnescapedStringContentChar),
+}
+pub struct StringContent(Vec<StringContentChar>);
+pub struct StringDelimiter();
+pub struct ShitString(StringDelimiter, StringContent, StringDelimiter);
+
+pub struct ImportBeginningMark();
+pub struct ImportFilePath(ShitString);
+pub struct Import(ImportBeginningMark, ImportFilePath);
+
+pub struct FunctionBeginningMark();
+pub struct Function(FunctionBeginningMark, EndingMark);
+
+pub struct NameChar(char);
+pub struct Name(Vec<NameChar>);
+
+pub enum Expression {
+    Import(Import),
+    Name(Name),
+    ShitString(ShitString),
+    Function(Function),
+    Loop(Loop),
+    IfElse(IfElse),
+}
+
+pub struct AssignmentOperator();
+
+pub struct Assignment(Name, AssignmentOperator, Expression);
+
+pub enum Statement {
+    Expression(Expression),
+    Assignment(Assignment),
+}
+
+pub struct Program(Vec<Statement>);
