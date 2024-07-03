@@ -78,6 +78,22 @@ fn parse_escaped_string_content_char<'a>(
     } else {
       not_matched()
     }
+
+    span(
+        if_(matches('\\'),
+            if_(matches('\\'),
+                ok('\\')
+            ).else_if(matches('"'),
+                ok('"')
+            ).else_if(any,
+                err(UnexpectedCharacterAfterEscape)
+            ).else_(
+                err(NoCharacterAfterEscape)
+            )
+        ).else_(
+            not_matched()
+        )
+    )
      */
     cut('\\').and(record(|(span_beginning, _c)|, cut('\\').or(cut('"')).map(|| EscapedStringContentChar)))
     cut_exact('\\')
