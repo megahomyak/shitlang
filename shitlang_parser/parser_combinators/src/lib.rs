@@ -44,97 +44,56 @@ impl<T: Fn(&I) -> ParsingResult<O, NI, E>, O, I, NI, E> Parser<O, I, NI, E> for 
     }
 }
 
-// Parser extensions
-
-pub trait ParserExt<O, I, NI, E>: Parser<O, I, NI, E> {
-    fn then<NO, NNI, P: Parser<NO, NI, NNI, E>>(
-        &self,
-        f: impl Fn(O) -> P,
-    ) -> impl Parser<NO, I, NNI, E>;
-
-    fn or<NE, P: Parser<O, I, NI, NE>>(&self, f: impl Fn(E) -> P) -> impl Parser<O, I, NI, NE>;
-
-    fn map<NO>(&self, f: impl Fn(O) -> NO) -> impl Parser<NO, I, NI, E>;
-
-    fn map_err<NE>(&self, f: impl Fn(E) -> NE) -> impl Parser<O, I, NI, NE>;
-}
-
-impl<T: Parser<O, I, NI, E>, O, I, NI, E> ParserExt<O, I, NI, E> for T {
-    fn then<NO, NNI, P: Parser<NO, NI, NNI, E>>(
-        &self,
-        f: impl Fn(O) -> P,
-    ) -> impl Parser<NO, I, NNI, E> {
-        move |input: &I| match self.parse(input) {
-            ParsingResult::Err(e) => ParsingResult::Err(e),
-            ParsingResult::Ok {
-                output,
-                rest_of_input,
-            } => f(output).parse(&rest_of_input),
-        }
-    }
-
-    fn or<NE, P: Parser<O, I, NI, NE>>(&self, f: impl Fn(E) -> P) -> impl Parser<O, I, NI, NE> {
-        move |input: &I| match self.parse(input) {
-            ParsingResult::Ok {
-                output,
-                rest_of_input,
-            } => ParsingResult::Ok {
-                output,
-                rest_of_input,
-            },
-            ParsingResult::Err(e) => f(e).parse(input),
-        }
-    }
-
-    fn map<NO>(&self, f: impl Fn(O) -> NO) -> impl Parser<NO, I, NI, E> {
-        move |input: &I| match self.parse(input) {
-            ParsingResult::Err(e) => ParsingResult::Err(e),
-            ParsingResult::Ok {
-                output,
-                rest_of_input,
-            } => ParsingResult::Ok {
-                output: f(output),
-                rest_of_input,
-            },
-        }
-    }
-
-    fn map_err<NE>(&self, f: impl Fn(E) -> NE) -> impl Parser<O, I, NI, NE> {
-        move |input: &I| match self.parse(input) {
-            ParsingResult::Err(e) => ParsingResult::Err(f(e)),
-            ParsingResult::Ok {
-                output,
-                rest_of_input,
-            } => ParsingResult::Ok {
-                output,
-                rest_of_input,
-            },
-        }
-    }
-}
-
 // Combinators
 
-pub enum PredicateCuttingError {
-    NotMatched(),
-}
-
-pub fn cut<I: Input>(
-    f: impl Fn(&I::Item) -> bool,
-) -> impl Parser<I::Item, I, I, PredicateCuttingError> {
-    move |input: &I| {
-        if let ParsingResult::Ok {
+pub fn filter<I: Input>(f: impl Fn(&I::Item) -> bool) -> impl Parser<I::Item, I, I, ()> {
+    move |input: &I| match input.cut() {
+        ParsingResult::Ok {
             output,
             rest_of_input,
-        } = input.cut()
-        {
+        } => {
             if f(&output) {
-                return ParsingResult::Ok {
+                ParsingResult::Ok {
                     output,
                     rest_of_input,
-                };
+                }
+            } else {
+                ParsingResult::Err(())
             }
         }
-        ParsingResult::Err(PredicateCuttingError::NotMatched())
+        ParsingResult::Err(_cutting_error) => ParsingResult::Err(()),
     }
+}
+
+pub fn matching<Item: Eq, I: Input<Item = Item>>(
+    pattern: I::Item,
+) -> impl Parser<I::Item, I, I, ()> {
+    filter(move |item| pattern.eq(item))
+}
+
+pub fn any<I: Input>() -> impl Parser<I::Item, I, I, ()> {
+    filter(|_item| true)
+}
+
+pub struct BranchingParser<P, B, P2, B2> {
+    previous: Option<BranchingParser<P, B>>,
+    predicate: P2,
+    branch: B2,
+}
+
+impl<P, B, P2, B2> BranchingParser<P, B, P2, B2> {
+    pub fn else_if<P3, B3>(self, predicate: P3, branch: B3) -> BranchingParser<>
+    pub fn else_if<P2: Parser<>, B2: Parser<>>(self, predicate: P2, branch: B2) -> BranchingParser<>
+}
+
+impl<Q, I, E> BranchingParser<Q, I, E> {
+    pub fn else_<P: Parser>(self, branch: P) -> impl Parser<> {}
+
+    pub fn else_if<P: Parser, Q: Parser>(self, query: Q, branch: P) -> BranchingParser<Q, > {
+
+    }
+}
+
+pub fn if_(query: impl Parser<>, branch: Fn(...) -> impl Parser<>) -> BranchingParser<> {
+
 }

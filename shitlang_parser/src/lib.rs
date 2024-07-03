@@ -16,18 +16,19 @@ use ParsingError::{Recoverable, Unrecoverable};
 
 type Span = std::ops::RangeInclusive<Position>;
 
-use parser_combinators::cut;
+use parser_combinators::filter;
 use parser_combinators::ParserExt;
 use parser_combinators::PredicateCuttingError::{self, NotMatched};
 
 fn cut_exact<'a>(
     pattern: char,
 ) -> impl ShitParser<'a, <Input<'a> as Iterator>::Item, PredicateCuttingError> {
-    cut(move |(_i, c)| *c == pattern)
+    frog!();
+    filter(move |(_i, c)| *c == pattern)
 }
 
 fn cut_any<'a>() -> impl ShitParser<'a, <Input<'a> as Iterator>::Item, PredicateCuttingError> {
-    cut(|_| true)
+    filter(|_| true)
 }
 
 fn unrec<O>(e: Error) -> impl ShitParser<'a, O, ParsingError> {
@@ -80,22 +81,41 @@ fn parse_escaped_string_content_char<'a>(
     }
 
     span(
-        if_(matches('\\'),
-            if_(matches('\\'),
-                ok('\\')
-            ).else_if(matches('"'),
-                ok('"')
-            ).else_if(any,
+        if_(matches('\\'), |_|
+            if_(matches('\\'), |c|
+                ok(c)
+            , ||
+                if_(matches('"'), |c|
+                    ok(c)
+                , ||
+
+                )
+            )
+            if_(matches('\\'), |c|
+                ok(c)
+            ).else_if(matches('"'), |c|
+                ok(c)
+            ).else_if(any, |_|
                 err(UnexpectedCharacterAfterEscape)
             ).else_(
                 err(NoCharacterAfterEscape)
             )
-        ).else_(
-            not_matched()
+        )
+    )
+
+    string:
+    span(
+        if_(matches('"'), |_|
+            repeating(String, string_char(), |chars| // string_char() throws an error with a span
+                if_(matches('"'), |_|
+                    ShitString(chars)
+                ).else_(
+                    err(UnclosedQuote) // Creates an error explicitly without a span
+                )
+            )
         )
     )
      */
-    cut('\\').and(record(|(span_beginning, _c)|, cut('\\').or(cut('"')).map(|| EscapedStringContentChar)))
     cut_exact('\\')
         .map_err(|NotMatched()| Recoverable())
         .then(|(span_beginning, _c)| {
