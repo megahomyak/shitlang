@@ -64,7 +64,22 @@ pub struct Loop(LoopBeginningMark, LoopBody, EndingMark);
 pub struct EscapedStringContentChar(char);
 fn parse_escaped_string_content_char<'a>(
 ) -> impl ShitParser<'a, EscapedStringContentChar, ParsingError> {
-    cut('\\').and(|(span_beginning, _c)| cut('\\').or(cut('"')))
+    /*
+    if '\\' {
+        if Some('\\') {
+            ok('\\')
+        } else if Some('"') {
+            ok('"')
+        } else if Some(_) {
+            err(UnexpectedCharacterAfterEscape)
+        } else if None {
+            err(NoCharacterAfterEscape)
+        }
+    } else {
+      not_matched()
+    }
+     */
+    cut('\\').and(record(|(span_beginning, _c)|, cut('\\').or(cut('"')).map(|| EscapedStringContentChar)))
     cut_exact('\\')
         .map_err(|NotMatched()| Recoverable())
         .then(|(span_beginning, _c)| {
